@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>退休金通胀计算器 (增强版)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #4CAF50;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        input[type="number"], select {
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        /* 针对通胀区间的特殊样式 */
+        .inflation-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 5px;
+            background: #f9f9f9;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .inflation-row input {
+            width: 40%;
+        }
+        .remove-btn {
+            background-color: #ff4444;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+        .add-btn {
+            background-color: #2196F3;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button.secondary {
+            background-color: #666;
+        }
+        
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        #result {
+            margin-top: 20px;
+            line-height: 1.6;
+        }
+        b {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        /* Modal styles */
+        .modal, .error-modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content, .error-modal-content {
+            background-color: #fff;
+            margin: 10% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 5px;
+            position: relative;
+        }
+        .modal-close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .mode-switch-area {
+            background: #e8f5e9;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>退休金通胀计算器 (增强版)</h1>
+    <h2>开发：Ginger的保险笔记本</h2>
+    <form id="calculator">
+        <label for="startAge">交费起始年龄：</label>
+        <input type="number" id="startAge" value="30" onchange="updateInflationStartAge()"><br>
+
+        <label for="retireAge">开始领取年龄：</label>
+        <select id="retireAge">
+            <option value="55">55岁</option>
+            <option value="60" selected>60岁</option>
+            <option value="65">65岁</option>
+            <option value="70">70岁</option>
+        </select><br>
+
+        <label for="payYears">交费年期：</label>
+        <input type="number" id="payYears" value="30"><br>
+
+        <label for="annualPayment">年缴费金额：</label>
+        <input type="number" id="annualPayment" value="10000"><br>
+
+        <div id="fixedPayout">
+            <label for="annualPayout">年领取金额：</label>
+            <input type="number" id="annualPayout" value="29900"><br>
+        </div>
+
+        <button type="button" class="secondary" id="togglePayoutMode" onclick="openModal()">切换到自定义领取数据模式</button><br>
+
+        <div class="mode-switch-area">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>通货膨胀率假设：</label>
+                <button type="button" class="secondary" style="padding:5px 10px; font-size:12px;" onclick="toggleInflationMode()">切换通胀模式</button>
+            </div>
+            
+            <div id="fixedInflationMode">
+                <select id="inflationRate">
+                    <option value="0">0%</option>
+                    <option value="0.01">1%</option>
+                    <option value="0.02">2%</option>
+                    <option value="0.03" selected>3%</option>
+                    <option value="0.04">4%</option>
+                    <option value="0.05">5%</option>
+                    <option value="0.06">6%</option>
+                    <option value="0.07">7%</option>
+                    <option value="0.08">8%</option>
+                    <option value="0.09">9%</option>
+                    <option value="0.1">10%</option>
+                </select>
+                <small style="color:#666;">当前模式：终身恒定通胀率</small>
+            </div>
+
+            <div id="variableInflationMode" style="display:none;">
+                <div id="inflationRowsContainer">
+                    </div>
+                <button type="button" class="add-btn" onclick="addInflationRow()">+ 增加通胀区间</button>
+                <br>
+                <small style="color:#666;">说明：自定义每个年龄段的通胀率。支持负数（如 -1 代表通缩1%）。未覆盖的年龄段将沿用上一个区间的数值。</small>
+            </div>
+        </div>
+
+        <button type="button" onclick="calculate()">计算</button>
+    </form>
+
+    <h2>计算结果</h2>
+    <div id="result"></div>
+
+    <h3>详细每年数据</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>年龄</th>
+                <th>当年通胀假设</th>
+                <th>缴费的实际购买力</th>
+                <th>账面名义年领取金额</th>
+                <th>领取的实际购买力</th>
+            </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+    </table>
+
+    <div id="customPayoutModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <div class="modal-header" style="font-weight:bold; margin-bottom:10px;">自定义领取数据</div>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table id="customPayoutTable">
+                    <thead>
+                        <tr>
+                            <th>年龄</th>
+                            <th>年领取金额</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customPayoutBody"></tbody>
+                </table>
+            </div>
+            <br>
+            <button type="button" onclick="validateCustomData()">确认并计算</button>
+        </div>
+    </div>
+
+    <div id="errorModal" class="error-modal">
+        <div class="error-modal-content">
+            <p>自定义数据不可以全部为0</p>
+            <button type="button" onclick="returnToCustomInput()">返回重填自定义数据</button>
+            <button type="button" onclick="switchToFixedPayout()">返回固定领取计算模式</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 状态变量 ---
+        let isCustomPayout = false;
+        let isVariableInflation = false; // 是否启用分阶段通胀
+
+        // --- 初始化 ---
+        window.onload = function() {
+            // 初始化一行默认通胀数据
+            addInflationRow();
+        };
+
+        // --- 通胀模式逻辑 ---
+        
+        function toggleInflationMode() {
+            isVariableInflation = !isVariableInflation;
+            const fixedDiv = document.getElementById('fixedInflationMode');
+            const varDiv = document.getElementById('variableInflationMode');
+            
+            if (isVariableInflation) {
+                fixedDiv.style.display = 'none';
+                varDiv.style.display = 'block';
+                // 确保至少有一行，并且第一行的起始年龄同步
+                updateInflationStartAge();
+            } else {
+                fixedDiv.style.display = 'block';
+                varDiv.style.display = 'none';
+            }
+        }
+
+        function addInflationRow() {
+            const container = document.getElementById('inflationRowsContainer');
+            const rowCount = container.children.length;
+            const startAgeVal = document.getElementById('startAge').value;
+            
+            // 默认值逻辑：第一行强制为起始年龄，后续行默认为上一行年龄+10
+            let defaultAge = parseInt(startAgeVal);
+            if (rowCount > 0) {
+                const lastInput = container.lastElementChild.querySelector('.infl-start-age');
+                defaultAge = parseInt(lastInput.value) + 10;
+                if (defaultAge > 105) defaultAge = 105;
+            }
+
+            const div = document.createElement('div');
+            div.className = 'inflation-row';
+            
+            // 第一行不可删除，不可修改起始年龄（必须等于缴费起始年龄）
+            const isFirst = rowCount === 0;
+            
+            let html = `
+                <label>从</label>
+                <input type="number" class="infl-start-age" value="${defaultAge}" min="0" max="105" ${isFirst ? 'readonly' : ''} onchange="sortInflationRows()">
+                <label>岁起，通胀率为(%)</label>
+                <input type="number" class="infl-rate" value="3" step="0.1" placeholder="例如 3 或 -1">
+            `;
+            
+            if (!isFirst) {
+                html += `<button type="button" class="remove-btn" onclick="this.parentElement.remove()">删除</button>`;
+            } else {
+                html += `<span style="width:50px;">(初始)</span>`; // 占位
+            }
+            
+            div.innerHTML = html;
+            container.appendChild(div);
+        }
+
+        function updateInflationStartAge() {
+            const startAge = document.getElementById('startAge').value;
+            const container = document.getElementById('inflationRowsContainer');
+            if (container.children.length > 0) {
+                const firstRowInput = container.children[0].querySelector('.infl-start-age');
+                if (firstRowInput) {
+                    firstRowInput.value = startAge;
+                }
+            }
+        }
+
+        // 简单的排序功能，确保用户输入的年龄是递增的（视觉上，逻辑上也需要处理）
+        function sortInflationRows() {
+            // 这里暂不强制重排DOM，以免打断用户输入，但在计算时会进行排序处理
+        }
+
+        // --- 核心计算逻辑 ---
+
+        function getDiscountFactors(startAge, endAge) {
+            // 这个函数返回一个数组，索引 i 对应 age = startAge + i
+            // 数组值为该年的累积折现因子
+            
+            let rates = new Array(105 - startAge + 2).fill(0); // 存储每年的具体通胀率
+
+            if (!isVariableInflation) {
+                // 固定模式
+                const rate = parseFloat(document.getElementById("inflationRate").value);
+                rates.fill(rate);
+            } else {
+                // 自定义模式：解析用户输入
+                const container = document.getElementById('inflationRowsContainer');
+                const rows = Array.from(container.children);
+                
+                // 提取数据并按年龄排序
+                let config = rows.map(row => {
+                    return {
+                        age: parseInt(row.querySelector('.infl-start-age').value),
+                        rate: parseFloat(row.querySelector('.infl-rate').value) / 100
+                    };
+                }).sort((a, b) => a.age - b.age);
+
+                // 将配置映射到每年
+                // 默认从 startAge 开始
+                let currentRate = 0;
+                
+                // 找到第一个配置
+                if (config.length > 0) currentRate = config[0].rate;
+
+                for (let age = startAge; age <= 105; age++) {
+                    // 检查这一年是否有新的配置生效
+                    // 找到小于等于当前年龄的最后一个配置
+                    let activeConfig = config.filter(c => c.age <= age).pop();
+                    if (activeConfig) {
+                        currentRate = activeConfig.rate;
+                    }
+                    rates[age - startAge] = currentRate;
+                }
+            }
+
+            // 计算累积折现因子
+            // Year 0 (StartAge): Factor = 1
+            // Year 1: Factor = 1 / (1 + rate_year0)
+            // Year 2: Factor = Factor_year1 / (1 + rate_year1)
+            let factors = [];
+            let currentFactor = 1.0;
+            factors.push(currentFactor); // Index 0 is StartAge
+
+            // 我们需要计算到 105 岁
+            for (let i = 0; i <= (105 - startAge); i++) {
+                const yearRate = rates[i];
+                // 下一年的折现因子 = 当前因子 / (1 + 当年通胀率)
+                // 注意：通胀是对未来的折现。
+                // 比如 StartAge 是 30岁。30岁当年的钱购买力是1。
+                // 31岁的钱，需要除以 (1+30岁的通胀率)。
+                currentFactor = currentFactor / (1 + yearRate);
+                factors.push(currentFactor);
+            }
+            
+            return { factors, rates };
+        }
+
+        function calculate() {
+            const startAge = parseInt(document.getElementById("startAge").value);
+            const retireAge = parseInt(document.getElementById("retireAge").value);
+            const payYears = parseInt(document.getElementById("payYears").value);
+            const annualPayment = parseFloat(document.getElementById("annualPayment").value);
+            const endPayAge = startAge + payYears - 1;
+
+            // 1. 获取通胀折现因子数组
+            const inflationData = getDiscountFactors(startAge, 105);
+            const discountFactors = inflationData.factors; // 数组索引 0 对应 startAge
+            const yearlyRates = inflationData.rates;
+
+            // 2. 准备领取数据 (Payouts)
+            let payouts = [];
+            if (isCustomPayout) {
+                for (let age = retireAge; age <= 105; age++) {
+                    const payoutValue = parseFloat(document.getElementById(`payout_${age}`).value) || 0;
+                    payouts.push(payoutValue);
+                }
+            } else {
+                const annualPayout = parseFloat(document.getElementById("annualPayout").value);
+                for (let age = retireAge; age <= 105; age++) {
+                    payouts.push(annualPayout);
+                }
+            }
+
+            // 3. 计算缴费的实际购买力 (Present Value of Payments)
+            let totalPaymentPV = 0;
+            let paymentPVArray = []; // 用于表格展示
+            
+            // 初始化表格数据数组 (0 到 105-startAge)
+            let tableData = new Array(105 - startAge + 1).fill(null);
+
+            for (let age = startAge; age <= 105; age++) {
+                const idx = age - startAge;
+                const df = discountFactors[idx]; // 获取当年的折现因子 (相对于startAge)
+                
+                let nominalPayment = 0;
+                let realPayment = 0;
+                let note = "";
+
+                if (age <= endPayAge) {
+                    nominalPayment = annualPayment;
+                    realPayment = nominalPayment * df;
+                    totalPaymentPV += realPayment;
+                } else if (age === endPayAge + 1) {
+                    // 仅仅为了展示累积投入虽然停止了，但货币在贬值
+                    note = "（缴费结束）";
+                }
+
+                // 存储用于表格展示
+                if(age <= endPayAge) {
+                    paymentPVArray.push(realPayment.toFixed(2));
+                } else {
+                    // 对于缴费结束后的年份，这里原本逻辑是显示累计投入的贬值情况，保留原逻辑意图
+                    // 原逻辑：continuedPaymentPV = TotalNominalPayment / (1+r)^t
+                    // 新逻辑：TotalNominalPayment * df
+                    const totalNominalPaid = annualPayment * payYears;
+                    const devaluedTotal = totalNominalPaid * df;
+                    if(age === endPayAge + 1) {
+                         paymentPVArray.push(`<b>${devaluedTotal.toFixed(2)}（总保费现值）</b>`);
+                    } else {
+                         paymentPVArray.push(`<b>${devaluedTotal.toFixed(2)}</b>`);
+                    }
+                }
+            }
+
+            // 4. 计算领取的实际购买力 (Present Value of Payouts)
+            // 领取是从 retireAge 开始的
+            let payoutPVs = []; // 存储每年的折现值
+            let totalNominalPayout80 = 0, totalPV80 = 0;
+            let totalNominalPayout90 = 0, totalPV90 = 0;
+            let totalNominalPayout105 = 0, totalPV105 = 0;
+
+            for (let i = 0; i < payouts.length; i++) {
+                const age = retireAge + i;
+                const idx = age - startAge; // 在 discountFactors 中的索引
+                const nominalVal = payouts[i];
+                const df = discountFactors[idx]; 
+                
+                const realVal = nominalVal * df;
+                payoutPVs.push(realVal);
+
+                // 累积统计
+                totalNominalPayout105 += nominalVal;
+                totalPV105 += realVal;
+
+                if (age <= 80) {
+                    totalNominalPayout80 += nominalVal;
+                    totalPV80 += realVal;
+                }
+                if (age <= 90) {
+                    totalNominalPayout90 += nominalVal;
+                    totalPV90 += realVal;
+                }
+            }
+
+            // 5. 计算结果指标
+            const percentage80 = totalNominalPayout80 > 0 ? (totalPV80 / totalNominalPayout80) * 100 : 0;
+            const percentage90 = totalNominalPayout90 > 0 ? (totalPV90 / totalNominalPayout90) * 100 : 0;
+            const percentage105 = totalNominalPayout105 > 0 ? (totalPV105 / totalNominalPayout105) * 100 : 0;
+
+            const costPer10000_80 = totalPV80 > 0 ? (totalPaymentPV / totalPV80) * 10000 : 0;
+            const costPer10000_90 = totalPV90 > 0 ? (totalPaymentPV / totalPV90) * 10000 : 0;
+            const costPer10000_105 = totalPV105 > 0 ? (totalPaymentPV / totalPV105) * 10000 : 0;
+
+            // 6. 输出摘要结果
+            const resultElement = document.getElementById("result");
+            resultElement.innerHTML = `
+                <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px;">
+                    <strong>领取到80岁、90岁、105岁时的累积领取金额（折现到${startAge}岁时的购买力）：</strong><br>
+                    80岁：${totalPV80.toFixed(2)} 元 <span style="color:#666; font-size:0.9em">（账面 ${totalNominalPayout80.toFixed(0)}，实际价值为账面的 ${percentage80.toFixed(2)}%）</span><br>
+                    90岁：${totalPV90.toFixed(2)} 元 <span style="color:#666; font-size:0.9em">（账面 ${totalNominalPayout90.toFixed(0)}，实际价值为账面的 ${percentage90.toFixed(2)}%）</span><br>
+                    105岁：${totalPV105.toFixed(2)} 元 <span style="color:#666; font-size:0.9em">（账面 ${totalNominalPayout105.toFixed(0)}，实际价值为账面的 ${percentage105.toFixed(2)}%）</span><br><br>
+
+                    <strong>每领取10000元（购买力）对应的实际缴费成本（折现到${startAge}岁）：</strong><br>
+                    80岁：${costPer10000_80.toFixed(2)} 元<br>
+                    90岁：${costPer10000_90.toFixed(2)} 元<br>
+                    105岁：${costPer10000_105.toFixed(2)} 元
+                </div>
+            `;
+
+            // 7. 生成详细每年数据表格
+            const detailBody = document.getElementById("detailBody");
+            detailBody.innerHTML = ''; 
+            for (let age = startAge; age <= 105; age++) {
+                const idx = age - startAge;
+                
+                let paymentDisplay = "";
+                // 处理 paymentPVArray 索引对其
+                if (idx < paymentPVArray.length) {
+                    paymentDisplay = paymentPVArray[idx];
+                }
+
+                let nominalPayout = 0;
+                let payoutPVDisplay = 0;
+
+                if (age >= retireAge) {
+                    const pIdx = age - retireAge;
+                    if (pIdx < payouts.length) {
+                        nominalPayout = payouts[pIdx];
+                        payoutPVDisplay = payoutPVs[pIdx].toFixed(2);
+                    }
+                }
+
+                const currentInflationRate = (yearlyRates[idx] * 100).toFixed(1) + "%";
+
+                detailBody.innerHTML += `
+                    <tr>
+                        <td>${age}</td>
+                        <td style="color:#666;">${currentInflationRate}</td>
+                        <td>${paymentDisplay}</td>
+                        <td>${nominalPayout > 0 ? nominalPayout.toFixed(2) : '-'}</td>
+                        <td>${nominalPayout > 0 ? payoutPVDisplay : '-'}</td>
+                    </tr>
+                `;
+            }
+        }
+
+        // --- 原有的 Modal 逻辑保持不变 ---
+        function openModal() {
+            const retireAge = parseInt(document.getElementById("retireAge").value);
+            const customPayoutBody = document.getElementById("customPayoutBody");
+            const modal = document.getElementById("customPayoutModal");
+            modal.style.display = "block";
+
+            // 如果已经有数据，保留数据，否则清空重置
+            // 这里为了简单，如果已经开启过自定义，就不重置了，除非切换年龄导致长度不一致
+            // 但原逻辑是每次打开重置，这里我们稍微优化一下：如果已经在自定义模式，尝试保留值
+            
+            if (!isCustomPayout || customPayoutBody.children.length === 0) {
+                customPayoutBody.innerHTML = '';
+                for (let age = retireAge; age <= 105; age++) {
+                    customPayoutBody.innerHTML += `
+                        <tr>
+                            <td>${age}</td>
+                            <td><input type="number" id="payout_${age}" value="0"></td>
+                        </tr>
+                    `;
+                }
+            } else {
+                // 检查起始年龄是否变化，如果变化则需要重建
+                const firstRowAge = parseInt(customPayoutBody.firstElementChild.children[0].innerText);
+                if (firstRowAge !== retireAge) {
+                     customPayoutBody.innerHTML = '';
+                    for (let age = retireAge; age <= 105; age++) {
+                        customPayoutBody.innerHTML += `
+                            <tr>
+                                <td>${age}</td>
+                                <td><input type="number" id="payout_${age}" value="0"></td>
+                            </tr>
+                        `;
+                    }
+                }
+            }
+            
+            isCustomPayout = true;
+        }
+
+        function closeModal() {
+            document.getElementById("customPayoutModal").style.display = "none";
+            calculate();
+        }
+
+        function validateCustomData() {
+            const retireAge = parseInt(document.getElementById("retireAge").value);
+            let allZero = true;
+            for (let age = retireAge; age <= 105; age++) {
+                const el = document.getElementById(`payout_${age}`);
+                if (el) {
+                    const val = parseFloat(el.value) || 0;
+                    if (val > 0) {
+                        allZero = false;
+                        break;
+                    }
+                }
+            }
+            if (allZero) {
+                document.getElementById("errorModal").style.display = "block";
+            } else {
+                closeModal();
+            }
+        }
+
+        function returnToCustomInput() {
+            document.getElementById("errorModal").style.display = "none";
+        }
+
+        function switchToFixedPayout() {
+            document.getElementById("errorModal").style.display = "none";
+            isCustomPayout = false;
+            document.getElementById("customPayoutModal").style.display = "none";
+            // 重置UI按钮文字或状态（可选）
+            calculate();
+        }
+    </script>
+</body>
+</html>
